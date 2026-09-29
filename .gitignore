@@ -1,0 +1,7 @@
+*.zip
+*.exe
+__pycache__/
+.venv/
+ga0/extracted/
+ga0/flat/
+ga0/q19/
