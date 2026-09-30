@@ -1,10 +1,15 @@
-import re, shutil, zipfile
+"""Q16 Move and rename files: flatten q-move-rename-files.zip into one folder, then shift each digit in names (1->2, 9->0).
+
+Run: uv run q16_move_rename_files.py path/to/q-move-rename-files.zip   (then run the sha256sum command it prints)
+"""
+import re, shutil, sys, zipfile
 from pathlib import Path
 
-HERE = Path(__file__).parent
-ZIP = next(HERE.glob("*.zip"))
-EXTRACT = HERE / "extracted"
-FLAT = HERE / "flat"
+if len(sys.argv) < 2:
+    sys.exit(__doc__)
+ZIP = Path(sys.argv[1])
+EXTRACT = ZIP.with_name(ZIP.stem + "_extracted")   # work folders next to the zip
+FLAT = ZIP.with_name(ZIP.stem + "_flat")
 
 for d in (EXTRACT, FLAT):
     shutil.rmtree(d, ignore_errors=True)
@@ -31,3 +36,4 @@ for p in sorted(FLAT.iterdir()):
     if new != p.name:
         p.rename(FLAT / new)
 print("renamed. sample:", sorted(x.name for x in FLAT.iterdir())[:5])
+print(f'next, in Git Bash: cd "{FLAT.resolve().as_posix()}" && grep . * | LC_ALL=C sort | sha256sum')

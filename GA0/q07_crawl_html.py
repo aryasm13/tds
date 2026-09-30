@@ -1,5 +1,12 @@
-import re, urllib.parse, urllib.request
+"""Q7 Count crawled HTML files: crawl the tdsdata crawl_html site and count HTML files starting with letters FIRST..LAST.
 
+Run: uv run q07_crawl_html.py FIRST LAST   (the letter range in your question, e.g. A K)
+"""
+import re, sys, urllib.parse, urllib.request
+
+if len(sys.argv) < 3:
+    sys.exit(__doc__)
+FIRST, LAST = sys.argv[1].lower(), sys.argv[2].lower()
 START = "https://sanand0.github.io/tdsdata/crawl_html/"
 seen, files = set(), set()
 
@@ -26,11 +33,12 @@ def crawl(url):
         elif nxt.endswith("/"):
             crawl(nxt)
 
-crawl(START)                      # <-- this call was missing
+crawl(START)
 
 names = [u.rstrip("/").split("/")[-1] for u in files]
-bn = [n for n in names if "b" <= n[0].lower() <= "n"]
+hits = [n for n in names if FIRST <= n[0].lower() <= LAST]
+label = f"{FIRST.upper()} to {LAST.upper()}"
 print("pages visited:", len(seen))
 print("total html files:", len(files))
-print("B to N (counting duplicates in different folders):", len(bn))
-print("B to N (unique filenames):", len(set(n.lower() for n in bn)))
+print(label, "(counting duplicates in different folders):", len(hits))
+print(label, "(unique filenames):", len(set(n.lower() for n in hits)))

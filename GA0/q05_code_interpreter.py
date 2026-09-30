@@ -2,6 +2,10 @@
 # requires-python = ">=3.11"
 # dependencies = ["fastapi", "uvicorn", "httpx", "pydantic"]
 # ///
+"""Q5 Code interpreter: FastAPI POST /code-interpreter runs Python code and, on errors, asks an LLM for the failing lines.
+
+Run: uv run q05_code_interpreter.py   (reads AIPIPE_TOKEN; serves http://127.0.0.1:8000/code-interpreter)
+"""
 import os
 import re
 import sys
@@ -23,7 +27,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-AIPIPE_TOKEN = os.environ.get("AIPIPE_TOKEN", "eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6IjIzZjMwMDIxMjNAZHMuc3R1ZHkuaWl0bS5hYy5pbiIsImlhdCI6MTc5MDcxMTY5NCwiaXNzIjoiaHR0cHM6Ly9haXBpcGUub3JnIiwiYXVkIjoiYWlwaXBlLWFwaSIsImV4cCI6MTc5MTMxNjQ5NH0.BIIam8M1Qg5HUVQ01DxJDJgAeTQoi6jRxNM9WQpf6bo")
+AIPIPE_TOKEN = os.environ.get("AIPIPE_TOKEN")  # set it in your shell, never in code (see README)
 
 
 class CodeRequest(BaseModel):

@@ -2,7 +2,12 @@
 # requires-python = ">=3.11"
 # dependencies = ["fastapi", "uvicorn"]
 # ///
+"""Q10 FastAPI server: GET /api returns the students in q-fastapi.csv, optionally filtered by one or more ?class= values.
+
+Run: uv run q10_students_api.py path/to/q-fastapi.csv   (serves http://127.0.0.1:8001/api)
+"""
 import csv
+import sys
 from pathlib import Path
 from typing import List, Optional
 
@@ -17,8 +22,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# find the csv next to this script, whatever it is called
-CSV = Path(__file__).parent / "q-fastapi.csv"
+# the csv path comes from the command line
+if len(sys.argv) < 2:
+    sys.exit(__doc__)
+CSV = Path(sys.argv[1])
 with CSV.open(newline="", encoding="utf-8-sig") as f:
     STUDENTS = [
         {"studentId": int(r["studentId"]), "class": r["class"].strip()}
@@ -36,4 +43,4 @@ def api(class_: Optional[List[str]] = Query(default=None, alias="class")):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8001)

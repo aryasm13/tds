@@ -1,0 +1,10 @@
+# Q18 Local Ollama endpoint: ngrok traffic policy that adds your X-Email header (plus CORS headers) to every response.
+# Run: uvx ngrok http 11434 --traffic-policy-file q18_ngrok_policy.yml   (start Ollama with OLLAMA_ORIGINS="*" first)
+on_http_response:
+  - actions:
+      - type: add-headers
+        config:
+          headers:
+            X-Email: "YOUR_EMAIL@ds.study.iitm.ac.in"
+            Access-Control-Expose-Headers: "*"
+            Access-Control-Allow-Headers: "Authorization,Content-Type,User-Agent,Accept,Ngrok-skip-browser-warning"

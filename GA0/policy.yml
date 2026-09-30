@@ -1,8 +1,0 @@
-on_http_response:
-  - actions:
-      - type: add-headers
-        config:
-          headers:
-            X-Email: "23f3002123@ds.study.iitm.ac.in"
-            Access-Control-Expose-Headers: "*"
-            Access-Control-Allow-Headers: "Authorization,Content-Type,User-Agent,Accept,Ngrok-skip-browser-warning"

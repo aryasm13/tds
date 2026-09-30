@@ -2,6 +2,12 @@
 *.exe
 __pycache__/
 .venv/
-ga0/extracted/
-ga0/flat/
-ga0/q19/
+.env
+
+# Personal downloads, outputs and notes: GA0/_private/ (and any other _private/ folder)
+_private/
+
+# Old output folders from earlier versions of the scripts
+GA0/extracted/
+GA0/flat/
+GA0/q19/
