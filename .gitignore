@@ -13,4 +13,4 @@ GA0/flat/
 GA0/q19/
 
 #for GA1
-!GA1
+!GA1/config-service/.env
