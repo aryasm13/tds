@@ -1,0 +1,255 @@
+blob
+mark :1
+data 37
+# Service
+
+Internal staging service.
+
+blob
+mark :2
+data 50
+APP_ENV=staging
+LOG_LEVEL=info
+FEATURE_CACHE=true
+
+commit refs/heads/main
+mark :3
+author CI Bot <ci@example.com> 1715000000 +0000
+committer CI Bot <ci@example.com> 1715000000 +0000
+data 24
+Initial service skeleton
+M 100644 :1 README.md
+M 100644 :2 config/app.env
+
+blob
+mark :4
+data 56
+# Service
+
+Internal staging service.
+
+Notes revision 1.
+
+commit refs/heads/main
+mark :5
+author CI Bot <ci@example.com> 1715003600 +0000
+committer CI Bot <ci@example.com> 1715003600 +0000
+data 34
+Tidy environment variable ordering
+from :3
+M 100644 :4 README.md
+
+blob
+mark :6
+data 56
+# Service
+
+Internal staging service.
+
+Notes revision 2.
+
+commit refs/heads/main
+mark :7
+author CI Bot <ci@example.com> 1715007200 +0000
+committer CI Bot <ci@example.com> 1715007200 +0000
+data 30
+Enable experimental cache flag
+from :5
+M 100644 :6 README.md
+
+blob
+mark :8
+data 56
+# Service
+
+Internal staging service.
+
+Notes revision 3.
+
+commit refs/heads/main
+mark :9
+author CI Bot <ci@example.com> 1715010800 +0000
+committer CI Bot <ci@example.com> 1715010800 +0000
+data 30
+Adjust default app environment
+from :7
+M 100644 :8 README.md
+
+blob
+mark :10
+data 56
+# Service
+
+Internal staging service.
+
+Notes revision 4.
+
+commit refs/heads/main
+mark :11
+author CI Bot <ci@example.com> 1715014400 +0000
+committer CI Bot <ci@example.com> 1715014400 +0000
+data 30
+Refresh contributor guidelines
+from :9
+M 100644 :10 README.md
+
+blob
+mark :12
+data 93
+APP_ENV=staging
+LOG_LEVEL=info
+STAGING_TOKEN=stg_52c8ab9ac2d4f3c68ee403d6
+FEATURE_CACHE=true
+
+commit refs/heads/main
+mark :13
+author CI Bot <ci@example.com> 1715018000 +0000
+committer CI Bot <ci@example.com> 1715018000 +0000
+data 38
+Add staging deploy token to app config
+from :11
+M 100644 :12 config/app.env
+
+blob
+mark :14
+data 56
+# Service
+
+Internal staging service.
+
+Notes revision 5.
+
+commit refs/heads/main
+mark :15
+author CI Bot <ci@example.com> 1715021600 +0000
+committer CI Bot <ci@example.com> 1715021600 +0000
+data 26
+Bump log level for staging
+from :13
+M 100644 :14 README.md
+
+blob
+mark :16
+data 56
+# Service
+
+Internal staging service.
+
+Notes revision 6.
+
+commit refs/heads/main
+mark :17
+author CI Bot <ci@example.com> 1715025200 +0000
+committer CI Bot <ci@example.com> 1715025200 +0000
+data 32
+Document feature flags in README
+from :15
+M 100644 :16 README.md
+
+blob
+mark :18
+data 56
+# Service
+
+Internal staging service.
+
+Notes revision 7.
+
+commit refs/heads/main
+mark :19
+author CI Bot <ci@example.com> 1715028800 +0000
+committer CI Bot <ci@example.com> 1715028800 +0000
+data 28
+Fix typo in deployment notes
+from :17
+M 100644 :18 README.md
+
+blob
+mark :20
+data 76
+APP_ENV=staging
+LOG_LEVEL=info
+STAGING_TOKEN=__rotated__
+FEATURE_CACHE=true
+
+commit refs/heads/main
+mark :21
+author CI Bot <ci@example.com> 1715032400 +0000
+committer CI Bot <ci@example.com> 1715032400 +0000
+data 38
+Rotate and revoke leaked staging token
+from :19
+M 100644 :20 config/app.env
+
+blob
+mark :22
+data 56
+# Service
+
+Internal staging service.
+
+Notes revision 8.
+
+commit refs/heads/main
+mark :23
+author CI Bot <ci@example.com> 1715036000 +0000
+committer CI Bot <ci@example.com> 1715036000 +0000
+data 30
+Refresh contributor guidelines
+from :21
+M 100644 :22 README.md
+
+blob
+mark :24
+data 56
+# Service
+
+Internal staging service.
+
+Notes revision 9.
+
+commit refs/heads/main
+mark :25
+author CI Bot <ci@example.com> 1715039600 +0000
+committer CI Bot <ci@example.com> 1715039600 +0000
+data 30
+Update README with setup steps
+from :23
+M 100644 :24 README.md
+
+blob
+mark :26
+data 57
+# Service
+
+Internal staging service.
+
+Notes revision 10.
+
+commit refs/heads/main
+mark :27
+author CI Bot <ci@example.com> 1715043200 +0000
+committer CI Bot <ci@example.com> 1715043200 +0000
+data 34
+Tidy environment variable ordering
+from :25
+M 100644 :26 README.md
+
+blob
+mark :28
+data 57
+# Service
+
+Internal staging service.
+
+Notes revision 11.
+
+commit refs/heads/main
+mark :29
+author CI Bot <ci@example.com> 1715046800 +0000
+committer CI Bot <ci@example.com> 1715046800 +0000
+data 30
+Enable experimental cache flag
+from :27
+M 100644 :28 README.md
+
