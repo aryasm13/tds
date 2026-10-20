@@ -448,3 +448,7 @@ async def http_exception_handler(request: Request, exc: HTTPException):
 @app.get("/healthz")
 def healthz():
     return {"ok": True}
+
+@app.on_event("startup")
+def startup():
+    init_db()
