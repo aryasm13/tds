@@ -1,7 +1,10 @@
-import os, json, sqlite3, hashlib, uuid, threading
+import os, json, hashlib, uuid, threading
 from datetime import datetime, timezone
 from contextlib import contextmanager
 from typing import Any
+
+import psycopg
+from psycopg.rows import dict_row
 
 import httpx
 from fastapi import FastAPI, Request, HTTPException
@@ -9,7 +12,7 @@ from fastapi.responses import JSONResponse
 
 APP_NAME = "GA3 A2A Invoice Agent"
 BASE_PATH = "/a2a"
-DB_PATH = os.getenv("DB_PATH", "/data/invoice_agent.sqlite3")
+DATABASE_URL = os.getenv("DATABASE_URL", "")
 A2A_JSON = "application/a2a+json"
 BATCH_MEDIA = "application/vnd.ga5.invoice-claim-batch+json"
 PROPOSALS_MEDIA = "application/vnd.ga5.invoice-action-proposals+json"
@@ -38,10 +41,9 @@ def digest(value: Any) -> str:
 
 
 def init_db():
-    os.makedirs(os.path.dirname(DB_PATH) or ".", exist_ok=True)
-    with sqlite3.connect(DB_PATH, timeout=30) as c:
-        c.execute("PRAGMA journal_mode=WAL")
-        c.execute("PRAGMA foreign_keys=ON")
+    if not DATABASE_URL:
+        raise RuntimeError("DATABASE_URL is not configured")
+    with psycopg.connect(DATABASE_URL, autocommit=True, row_factory=dict_row) as c:
         c.execute("""CREATE TABLE IF NOT EXISTS tasks (
             principal TEXT NOT NULL, task_id TEXT NOT NULL, context_id TEXT NOT NULL,
             batch_id TEXT, state TEXT NOT NULL, task_json TEXT NOT NULL,
@@ -52,25 +54,16 @@ def init_db():
             task_id TEXT NOT NULL, PRIMARY KEY(principal, message_id))""")
         c.execute("""CREATE TABLE IF NOT EXISTS decisions (
             package_hash TEXT PRIMARY KEY, decision_json TEXT NOT NULL, created_at TEXT NOT NULL)""")
-        c.commit()
 
 
 @contextmanager
 def db_conn():
     with _db_lock:
-        c = sqlite3.connect(DB_PATH, timeout=30, isolation_level=None)
-        c.row_factory = sqlite3.Row
-        c.execute("PRAGMA busy_timeout=30000")
-        c.execute("PRAGMA foreign_keys=ON")
+        c = psycopg.connect(DATABASE_URL, autocommit=True, row_factory=dict_row)
         try:
             yield c
         finally:
             c.close()
-
-
-@app.on_event("startup")
-def startup():
-    init_db()
 
 
 def bearer_principal(request: Request) -> str:
@@ -95,7 +88,7 @@ def task_status(state: str):
 
 def task_row(principal: str, task_id: str):
     with db_conn() as c:
-        row = c.execute("SELECT task_json FROM tasks WHERE principal=? AND task_id=?", (principal, task_id)).fetchone()
+        row = c.execute("SELECT task_json FROM tasks WHERE principal=%s AND task_id=%s", (principal, task_id)).fetchone()
     return json.loads(row["task_json"]) if row else None
 
 
@@ -103,7 +96,7 @@ def store_task(principal: str, task: dict, batch_id=None):
     ts = now_iso()
     with db_conn() as c:
         c.execute("""INSERT INTO tasks(principal,task_id,context_id,batch_id,state,task_json,created_at,updated_at)
-          VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(principal,task_id) DO UPDATE SET
+          VALUES(%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT(principal,task_id) DO UPDATE SET
           state=excluded.state,task_json=excluded.task_json,updated_at=excluded.updated_at""",
           (principal, task["id"], task["contextId"], batch_id, task["status"]["state"], canonical(task), ts, ts))
 
@@ -125,14 +118,14 @@ def package_id(package: dict):
 def get_cached_decision(package: dict):
     ph = digest(package)
     with db_conn() as c:
-        row = c.execute("SELECT decision_json FROM decisions WHERE package_hash=?", (ph,)).fetchone()
+        row = c.execute("SELECT decision_json FROM decisions WHERE package_hash=%s", (ph,)).fetchone()
     return json.loads(row["decision_json"]) if row else None
 
 
 def save_cached_decision(package: dict, decision: dict):
     ph = digest(package)
     with db_conn() as c:
-        c.execute("INSERT OR IGNORE INTO decisions(package_hash,decision_json,created_at) VALUES(?,?,?)",
+        c.execute("INSERT INTO decisions(package_hash,decision_json,created_at) VALUES(%s,%s,%s) ON CONFLICT(package_hash) DO NOTHING",
                   (ph, canonical(decision), now_iso()))
 
 
@@ -252,14 +245,14 @@ def process_initial(principal: str, body: dict):
         raise HTTPException(status_code=400, detail={"code": "INVALID_BATCH", "message": "Invoice batch data part required"})
     msg_hash = digest(message)  # configuration deliberately excluded
     with db_conn() as c:
-        c.execute("BEGIN IMMEDIATE")
-        existing = c.execute("SELECT message_hash,task_id FROM messages WHERE principal=? AND message_id=?",
+        c.execute("BEGIN")
+        existing = c.execute("SELECT message_hash,task_id FROM messages WHERE principal=%s AND message_id=%s",
                              (principal, message["messageId"])).fetchone()
         if existing:
             if existing["message_hash"] != msg_hash:
                 c.execute("ROLLBACK")
                 raise HTTPException(status_code=409, detail={"code": "IDEMPOTENCY_CONFLICT", "message": "Message ID reused with changed content"})
-            row = c.execute("SELECT task_json FROM tasks WHERE principal=? AND task_id=?", (principal, existing["task_id"])).fetchone()
+            row = c.execute("SELECT task_json FROM tasks WHERE principal=%s AND task_id=%s", (principal, existing["task_id"])).fetchone()
             c.execute("COMMIT")
             if row:
                 return json.loads(row["task_json"])
@@ -278,8 +271,8 @@ def process_initial(principal: str, body: dict):
             "kind": "task"}
     # Persist task and idempotency mapping in one transaction before responding.
     with db_conn() as c:
-        c.execute("BEGIN IMMEDIATE")
-        existing = c.execute("SELECT message_hash,task_id FROM messages WHERE principal=? AND message_id=?",
+        c.execute("BEGIN")
+        existing = c.execute("SELECT message_hash,task_id FROM messages WHERE principal=%s AND message_id=%s",
                              (principal, message["messageId"])).fetchone()
         if existing:
             c.execute("ROLLBACK")
@@ -289,8 +282,8 @@ def process_initial(principal: str, body: dict):
             if found: return found
             raise HTTPException(status_code=500, detail={"code": "STATE_ERROR", "message": "Stored task unavailable"})
         ts = now_iso()
-        c.execute("INSERT INTO tasks VALUES(?,?,?,?,?,?,?,?)", (principal, task_id, context_id, batch["batchId"], INPUT_REQUIRED, canonical(task), ts, ts))
-        c.execute("INSERT INTO messages VALUES(?,?,?,?)", (principal, message["messageId"], msg_hash, task_id))
+        c.execute("INSERT INTO tasks VALUES(%s,%s,%s,%s,%s,%s,%s,%s)", (principal, task_id, context_id, batch["batchId"], INPUT_REQUIRED, canonical(task), ts, ts))
+        c.execute("INSERT INTO messages VALUES(%s,%s,%s,%s)", (principal, message["messageId"], msg_hash, task_id))
         c.execute("COMMIT")
     return task
 
@@ -307,8 +300,8 @@ def process_results(principal: str, body: dict):
         raise HTTPException(status_code=400, detail={"code": "INVALID_CONTINUATION", "message": "Action results data part required"})
     # Transaction serializes continuation against cancellation and terminal replay.
     with db_conn() as c:
-        c.execute("BEGIN IMMEDIATE")
-        row = c.execute("SELECT task_json,state,batch_id,context_id FROM tasks WHERE principal=? AND task_id=?", (principal, task_id)).fetchone()
+        c.execute("BEGIN")
+        row = c.execute("SELECT task_json,state,batch_id,context_id FROM tasks WHERE principal=%s AND task_id=%s", (principal, task_id)).fetchone()
         if not row:
             c.execute("ROLLBACK")
             raise HTTPException(status_code=404, detail={"code": "TASK_NOT_FOUND", "message": "Task not found"})
@@ -358,9 +351,9 @@ def process_results(principal: str, body: dict):
         task["artifacts"].append(new_artifact(RECEIPTS_MEDIA, {"batchId": batch_id, "executions": executions}))
         task["status"] = task_status(COMPLETED)
         ts = now_iso()
-        c.execute("UPDATE tasks SET state=?,task_json=?,updated_at=? WHERE principal=? AND task_id=? AND state=?",
+        update_cursor = c.execute("UPDATE tasks SET state=%s,task_json=%s,updated_at=%s WHERE principal=%s AND task_id=%s AND state=%s",
                   (COMPLETED, canonical(task), ts, principal, task_id, INPUT_REQUIRED))
-        if c.total_changes == 0:
+        if update_cursor.rowcount == 0:
             c.execute("ROLLBACK")
             raise HTTPException(status_code=409, detail={"code": "STATE_RACE", "message": "Task changed concurrently"})
         c.execute("COMMIT")
@@ -407,7 +400,7 @@ def list_tasks(request: Request):
     principal = bearer_principal(request)
     check_headers(request)
     with db_conn() as c:
-        rows = c.execute("SELECT task_json FROM tasks WHERE principal=? ORDER BY created_at DESC", (principal,)).fetchall()
+        rows = c.execute("SELECT task_json FROM tasks WHERE principal=%s ORDER BY created_at DESC", (principal,)).fetchall()
     tasks = [json.loads(r["task_json"]) for r in rows]
     return JSONResponse({"tasks": tasks}, media_type=A2A_JSON)
 
@@ -427,8 +420,8 @@ def cancel_task(task_id: str, request: Request):
     principal = bearer_principal(request)
     check_headers(request)
     with db_conn() as c:
-        c.execute("BEGIN IMMEDIATE")
-        row = c.execute("SELECT task_json,state FROM tasks WHERE principal=? AND task_id=?", (principal, task_id)).fetchone()
+        c.execute("BEGIN")
+        row = c.execute("SELECT task_json,state FROM tasks WHERE principal=%s AND task_id=%s", (principal, task_id)).fetchone()
         if not row:
             c.execute("ROLLBACK")
             raise HTTPException(status_code=404, detail={"code": "TASK_NOT_FOUND", "message": "Task not found"})
@@ -437,9 +430,9 @@ def cancel_task(task_id: str, request: Request):
             c.execute("ROLLBACK")
             raise HTTPException(status_code=409, detail={"code": "TERMINAL_TASK", "message": "Terminal tasks cannot be changed"})
         task["status"] = task_status(CANCELED)
-        c.execute("UPDATE tasks SET state=?,task_json=?,updated_at=? WHERE principal=? AND task_id=? AND state NOT IN (?,?)",
+        update_cursor = c.execute("UPDATE tasks SET state=%s,task_json=%s,updated_at=%s WHERE principal=%s AND task_id=%s AND state NOT IN (%s,%s)",
                   (CANCELED, canonical(task), now_iso(), principal, task_id, COMPLETED, CANCELED))
-        if c.total_changes == 0:
+        if update_cursor.rowcount == 0:
             c.execute("ROLLBACK")
             raise HTTPException(status_code=409, detail={"code": "STATE_RACE", "message": "Task changed concurrently"})
         c.execute("COMMIT")
