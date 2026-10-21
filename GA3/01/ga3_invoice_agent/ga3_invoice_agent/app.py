@@ -85,7 +85,9 @@ def check_headers(request: Request):
     if request.headers.get("A2A-Version") != "1.0":
         raise HTTPException(status_code=400, detail={"code": "UNSUPPORTED_VERSION", "message": "A2A-Version 1.0 required"})
     ctype = request.headers.get("content-type", "").split(";", 1)[0].strip().lower()
-    if ctype != A2A_JSON:
+    # Media type only applies to requests that carry a body; GETs and empty cancels have none.
+    has_body = request.method == "POST" and (ctype or request.headers.get("content-length", "0") not in ("", "0"))
+    if has_body and ctype != A2A_JSON:
         raise HTTPException(status_code=415, detail={"code": "UNSUPPORTED_MEDIA_TYPE", "message": "application/a2a+json required"})
 
 
