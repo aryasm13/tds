@@ -1,4 +1,4 @@
-import os, json, hashlib, uuid, threading, base64, logging
+import os, re, json, hashlib, uuid, threading, base64, logging
 from datetime import datetime, timezone
 from contextlib import contextmanager
 from concurrent.futures import ThreadPoolExecutor
@@ -185,6 +185,10 @@ def key_expiry(api_key: str) -> str:
         return "n/a"
 
 
+def _ref_key(ref: str) -> str:
+    return re.sub(r"[^0-9a-z]", "", str(ref).lower())
+
+
 def normalize_decision(package: dict, d: dict) -> dict:
     pid = package_id(package)
     if str(d.get("packageId")) != pid:
@@ -206,8 +210,10 @@ def normalize_decision(package: dict, d: dict) -> dict:
         raise ValueError("Exactly three evidence refs required")
     # Refs must be bracketed and must exist in this package; the model sometimes drops the brackets.
     package_text = canonical(package)
-    refs = [r.strip() if r.strip().startswith("[") else "[" + r.strip().strip("[]") + "]" for r in refs]
-    if len(set(refs)) != 3 or any(r not in package_text for r in refs):
+    known = re.findall(r"\[[^\[\]\n\"]{1,80}\]", package_text)
+    by_key = {_ref_key(k): k for k in known}
+    refs = [r.strip() if r.strip() in known else by_key.get(_ref_key(r), r.strip()) for r in refs]
+    if len(set(refs)) != 3 or any(r not in known for r in refs):
         raise ValueError("Evidence refs must be three distinct bracketed refs present in the package")
     rationale = d.get("rationale")
     if not isinstance(rationale, str):
@@ -258,12 +264,12 @@ def propose(batch: dict) -> list[dict]:
         else:
             uncached.append(p)
     if uncached:
-        wanted = {package_id(p) for p in uncached}
-        gen_map = {}
-        # The model occasionally drops or garbles a packageId; keep exact matches and
-        # re-ask once for only the missing packages instead of failing the whole batch.
-        for _attempt in range(2):
-            todo = [p for p in uncached if package_id(p) not in gen_map]
+        by_id = {package_id(p): p for p in uncached}
+        cleaned, last_error = {}, None
+        # Validate each decision on its own; re-ask only for packages whose decision was
+        # missing or failed validation, instead of failing the whole batch.
+        for _attempt in range(3):
+            todo = [p for p in uncached if package_id(p) not in cleaned]
             if not todo:
                 break
             # Small chunks in parallel: one large call made the model stop after ~3 decisions.
@@ -272,11 +278,14 @@ def propose(batch: dict) -> list[dict]:
                 results = list(pool.map(lambda ch: _safe_call(ch), chunks))
             for d in (d for res in results for d in res):
                 pid = str(d.get("packageId", "")).strip()
-                if pid in wanted and pid not in gen_map:
-                    gen_map[pid] = d
-        if set(gen_map) != wanted:
-            raise ValueError("Model decision set does not match packages")
-        cleaned = {package_id(p): normalize_decision(p, gen_map[package_id(p)]) for p in uncached}
+                if pid in by_id and pid not in cleaned:
+                    try:
+                        cleaned[pid] = normalize_decision(by_id[pid], {**d, "packageId": pid})
+                    except ValueError as e:
+                        last_error = e
+                        log.warning("decision rejected, will re-ask: %s", failure_category(e))
+        if set(cleaned) != set(by_id):
+            raise last_error or ValueError("Model decision set does not match packages")
         # Cache semantic decisions only (one batched write). A fresh actionId is created per task/batch.
         with db_conn() as c:
             with c.cursor() as cur:
