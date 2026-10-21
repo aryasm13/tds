@@ -244,14 +244,19 @@ def propose(batch: dict) -> list[dict]:
         else:
             uncached.append(p)
     if uncached:
-        generated = call_model(uncached)
+        wanted = {package_id(p) for p in uncached}
         gen_map = {}
-        for d in generated:
-            pid = str(d.get("packageId", ""))
-            if pid in gen_map:
-                raise ValueError("Duplicate model package decision")
-            gen_map[pid] = d
-        if set(gen_map) != {package_id(p) for p in uncached}:
+        # The model occasionally drops or garbles a packageId; keep exact matches and
+        # re-ask once for only the missing packages instead of failing the whole batch.
+        for _attempt in range(2):
+            todo = [p for p in uncached if package_id(p) not in gen_map]
+            if not todo:
+                break
+            for d in call_model(todo):
+                pid = str(d.get("packageId", "")).strip()
+                if pid in wanted and pid not in gen_map:
+                    gen_map[pid] = d
+        if set(gen_map) != wanted:
             raise ValueError("Model decision set does not match packages")
         cleaned = {package_id(p): normalize_decision(p, gen_map[package_id(p)]) for p in uncached}
         # Cache semantic decisions only (one batched write). A fresh actionId is created per task/batch.
