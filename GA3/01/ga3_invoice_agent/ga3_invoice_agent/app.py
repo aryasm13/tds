@@ -1,4 +1,4 @@
-import os, json, hashlib, uuid, threading
+import os, json, hashlib, uuid, threading, base64, logging
 from datetime import datetime, timezone
 from contextlib import contextmanager
 from typing import Any
@@ -24,6 +24,12 @@ CANCELED = "TASK_STATE_CANCELED"
 ACTIONS = {"settle_invoice", "request_approval", "hold_invoice", "reject_duplicate", "open_exception"}
 
 app = FastAPI(title=APP_NAME, version="1.0.0")
+log = logging.getLogger("ga3")
+if not log.handlers:
+    _handler = logging.StreamHandler()
+    _handler.setFormatter(logging.Formatter("%(levelname)s ga3: %(message)s"))
+    log.addHandler(_handler)
+    log.setLevel(logging.INFO)
 _db_lock = threading.RLock()
 _initial_lock = threading.RLock()  # serialize first-time work so concurrent retries do not duplicate model calls
 
@@ -151,6 +157,32 @@ def call_model(packages: list[dict]) -> list[dict]:
     return decisions
 
 
+def failure_category(e: Exception) -> str:
+    """Sanitized cause for logs: status codes, hosts and our own fixed messages only, never content."""
+    if isinstance(e, httpx.HTTPStatusError):
+        return f"provider_http_{e.response.status_code} host={e.request.url.host}"
+    if isinstance(e, httpx.TimeoutException):
+        return "provider_timeout"
+    if isinstance(e, httpx.HTTPError):
+        return "provider_network_" + type(e).__name__
+    if isinstance(e, json.JSONDecodeError):
+        return "provider_output_not_json"
+    if isinstance(e, (ValueError, RuntimeError, KeyError, TypeError, IndexError)):
+        return f"{type(e).__name__}: {str(e)[:120]}"
+    return type(e).__name__
+
+
+def key_expiry(api_key: str) -> str:
+    """Expiry of a JWT-style key (e.g. AI Pipe tokens expire after 7 days); 'n/a' for other keys."""
+    try:
+        payload = api_key.split(".")[1]
+        claims = json.loads(base64.urlsafe_b64decode(payload + "=" * (-len(payload) % 4)))
+        exp = datetime.fromtimestamp(int(claims["exp"]), timezone.utc)
+        return exp.isoformat() + (" (EXPIRED)" if exp < datetime.now(timezone.utc) else "")
+    except Exception:
+        return "n/a"
+
+
 def normalize_decision(package: dict, d: dict) -> dict:
     pid = package_id(package)
     if str(d.get("packageId")) != pid:
@@ -264,7 +296,9 @@ def process_initial(principal: str, body: dict):
         raise
     except Exception as e:
         # Do not return model output, tokens, or package contents in error messages.
-        raise HTTPException(status_code=502, detail={"code": "DECISION_FAILED", "message": "Could not produce validated invoice proposals"}) from e
+        rid = "req_" + uuid.uuid4().hex[:12]
+        log.error("DECISION_FAILED requestId=%s packages=%d cause=%s", rid, len(batch.get("packages") or []), failure_category(e))
+        raise HTTPException(status_code=502, detail={"code": "DECISION_FAILED", "message": "Could not produce validated invoice proposals", "requestId": rid}) from e
     task_id, context_id = "task_" + uuid.uuid4().hex, "ctx_" + uuid.uuid4().hex
     task = {"id": task_id, "contextId": context_id, "status": task_status(INPUT_REQUIRED),
             "history": [message], "artifacts": [new_artifact(PROPOSALS_MEDIA, {"batchId": batch["batchId"], "proposals": proposals})],
@@ -310,9 +344,15 @@ def process_results(principal: str, body: dict):
             c.execute("ROLLBACK")
             raise HTTPException(status_code=409, detail={"code": "CONTEXT_MISMATCH", "message": "Continuation context mismatch"})
         if row["state"] in (COMPLETED, CANCELED):
-            # Terminal tasks are immutable; exact replay returns the stored task.
-            c.execute("COMMIT")
-            return task
+            # Terminal tasks are immutable. Only an exact replay of the continuation that completed
+            # the task returns it again; anything else (e.g. results after a cancel) is a 409.
+            last = (task.get("history") or [None])[-1]
+            if (row["state"] == COMPLETED and isinstance(last, dict)
+                    and last.get("messageId") == message.get("messageId") and digest(last) == digest(message)):
+                c.execute("COMMIT")
+                return task
+            c.execute("ROLLBACK")
+            raise HTTPException(status_code=409, detail={"code": "TERMINAL_TASK", "message": "Terminal tasks cannot be changed"})
         if row["state"] != INPUT_REQUIRED:
             c.execute("ROLLBACK")
             raise HTTPException(status_code=409, detail={"code": "INVALID_STATE", "message": "Task is not awaiting results"})
@@ -452,3 +492,7 @@ def healthz():
 @app.on_event("startup")
 def startup():
     init_db()
+    key = os.getenv("AI_API_KEY", "")
+    log.info("AI provider host=%s model=%s key_set=%s key_expires=%s",
+             httpx.URL(os.getenv("AI_BASE_URL", "https://api.openai.com/v1")).host,
+             os.getenv("AI_MODEL", "gpt-4o-mini"), bool(key), key_expiry(key))
