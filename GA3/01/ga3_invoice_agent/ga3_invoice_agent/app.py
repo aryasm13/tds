@@ -231,8 +231,14 @@ def propose(batch: dict) -> list[dict]:
         raise ValueError("Duplicate package IDs")
     output_by_id = {}
     uncached = []
+    # One query for all cache lookups (a connection per package cost ~1s each on Render).
+    hashes = {package_id(p): digest(p) for p in packages}
+    with db_conn() as c:
+        rows = c.execute("SELECT package_hash,decision_json FROM decisions WHERE package_hash = ANY(%s)",
+                         (list(hashes.values()),)).fetchall()
+    cached_by_hash = {r["package_hash"]: json.loads(r["decision_json"]) for r in rows}
     for p in packages:
-        cached = get_cached_decision(p)
+        cached = cached_by_hash.get(hashes[package_id(p)])
         if cached:
             output_by_id[package_id(p)] = cached
         else:
@@ -247,11 +253,13 @@ def propose(batch: dict) -> list[dict]:
             gen_map[pid] = d
         if set(gen_map) != {package_id(p) for p in uncached}:
             raise ValueError("Model decision set does not match packages")
-        for p in uncached:
-            clean = normalize_decision(p, gen_map[package_id(p)])
-            # Cache semantic decision only. A fresh actionId is created per task/batch.
-            save_cached_decision(p, clean)
-            output_by_id[package_id(p)] = clean
+        cleaned = {package_id(p): normalize_decision(p, gen_map[package_id(p)]) for p in uncached}
+        # Cache semantic decisions only (one batched write). A fresh actionId is created per task/batch.
+        with db_conn() as c:
+            with c.cursor() as cur:
+                cur.executemany("INSERT INTO decisions(package_hash,decision_json,created_at) VALUES(%s,%s,%s) ON CONFLICT(package_hash) DO NOTHING",
+                                [(hashes[pid], canonical(d), now_iso()) for pid, d in cleaned.items()])
+        output_by_id.update(cleaned)
     proposals = []
     for p in packages:
         d = output_by_id[package_id(p)]
