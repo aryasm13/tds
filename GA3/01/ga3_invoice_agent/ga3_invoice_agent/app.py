@@ -491,8 +491,10 @@ def list_tasks(request: Request):
     principal = bearer_principal(request)
     check_headers(request)
     with db_conn() as c:
-        rows = c.execute("SELECT task_json FROM tasks WHERE principal=%s ORDER BY created_at DESC", (principal,)).fetchall()
-    tasks = [json.loads(r["task_json"]) for r in rows]
+        rows = c.execute("SELECT task_id,context_id,state FROM tasks WHERE principal=%s ORDER BY created_at DESC LIMIT 500",
+                         (principal,)).fetchall()
+    # Compact owner-only listing; full tasks (history/artifacts) come from GET /tasks/{id}.
+    tasks = [{"id": r["task_id"], "contextId": r["context_id"], "status": task_status(r["state"]), "kind": "task"} for r in rows]
     return JSONResponse({"tasks": tasks}, media_type=A2A_JSON)
 
 
