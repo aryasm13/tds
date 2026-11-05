@@ -22,6 +22,12 @@ pip install -r requirements.txt
 uvicorn app:app --host 0.0.0.0 --port 8000
 ```
 
+## How I deployed it
+
+Render **Web Service** from this repo, Language **Docker**, Root Directory
+`GA3/01/ga3_invoice_agent/ga3_invoice_agent`, with a Render PostgreSQL database. I used AI Pipe as the provider
+(`AI_BASE_URL=https://aipipe.org/openai/v1`, `AI_MODEL=gpt-4o-mini`). `GET /healthz` wakes a sleeping free instance.
+
 The submitted A2A base URL is expected to be `https://YOUR-HOST/a2a/`. The Agent Card is at `https://YOUR-HOST/.well-known/agent-card.json`.
 
 Before spending a GA3 Check, verify the Agent Card, headers, database persistence, AI provider settings, and the hidden audit/lifecycle cases.
