@@ -20,6 +20,19 @@ RAG_MODEL = os.environ.get("RAG_MODEL", "gpt-4.1-mini")
 SAFETY_MODEL = os.environ.get("SAFETY_MODEL", "gpt-4.1")
 
 app = FastAPI()
+
+
+@app.middleware("http")
+async def strip_vercel_prefix(request, call_next):
+    """Vercel may hand the function a path prefixed with /api/index; route on the public path."""
+    path = request.scope["path"]
+    for pre in ("/api/index", "/api"):
+        if path == pre or path.startswith(pre + "/"):
+            request.scope["path"] = path[len(pre):] or "/"
+            break
+    return await call_next(request)
+
+
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 http = httpx.Client(timeout=30, headers={"Authorization": f"Bearer {AI_KEY}"})
 PASSAGES = json.loads((Path(__file__).parent / "passages.json").read_text(encoding="utf-8"))
