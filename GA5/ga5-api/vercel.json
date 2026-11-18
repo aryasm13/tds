@@ -1,0 +1,4 @@
+{
+  "functions": { "api/index.py": { "maxDuration": 60, "includeFiles": "api/{passages.json,kb.npy}" } },
+  "rewrites": [{ "source": "/(.*)", "destination": "/api/index" }]
+}
