@@ -30,7 +30,9 @@ async def strip_vercel_prefix(request, call_next):
         if path == pre or path.startswith(pre + "/"):
             request.scope["path"] = path[len(pre):] or "/"
             break
-    return await call_next(request)
+    response = await call_next(request)
+    response.headers["Access-Control-Allow-Origin"] = "*"  # always present, as Q1 requires
+    return response
 
 
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
