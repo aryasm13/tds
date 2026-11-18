@@ -35,6 +35,20 @@ async def strip_vercel_prefix(request, call_next):
     return response
 
 
+LOG: list = []                       # recent grader traffic (in-memory, per instance) for debugging
+LOG_KEY = os.environ.get("LOG_KEY", "ga5-debug-7f3c")
+
+
+def remember(kind: str, req, resp):
+    LOG.append({"kind": kind, "req": req, "resp": resp})
+    del LOG[:-400]
+
+
+@app.get("/debug/log")
+def debug_log(key: str = ""):
+    return LOG if key == LOG_KEY else JSONResponse({"detail": "Not Found"}, status_code=404)
+
+
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 http = httpx.Client(timeout=30, headers={"Authorization": f"Bearer {AI_KEY}"})
 PASSAGES = json.loads((Path(__file__).parent / "passages.json").read_text(encoding="utf-8"))
@@ -93,7 +107,9 @@ async def query(request: Request):
         out = {"answer": None}
     ans = out.get("answer")
     if ans in (None, "", "null") or float(sims[order[0]]) < 0.2:
-        return {"answer": None, "sources": [], "scores": [], "confidence": 0.1}
+        res = {"answer": None, "sources": [], "scores": [], "confidence": 0.1}
+        remember("query", body, res)
+        return res
     used = [int(s) for s in out.get("sources", []) if str(s).lstrip("-").isdigit() and int(s) in cand]
     srcs = (used + [i for i in cand if i not in used])[:k]
     srcs.sort(key=lambda i: -float(sims[i]))
@@ -101,7 +117,9 @@ async def query(request: Request):
         srcs = sorted(srcs, key=lambda i: (i not in used, -float(sims[i])))
     scores = sorted([round(max(0.0, min(1.0, float(sims[i]))), 4) for i in srcs], reverse=True)
     conf = max(0.65, min(0.99, float(out.get("confidence") or 0.85)))
-    return {"answer": str(ans), "sources": srcs, "scores": scores, "confidence": round(conf, 2)}
+    res = {"answer": str(ans), "sources": srcs, "scores": scores, "confidence": round(conf, 2)}
+    remember("query", body, res)
+    return res
 
 
 # ---------------- Q4: safety router ----------------
@@ -177,4 +195,6 @@ async def classify(request: Request):
     cases = body.get("cases") or []
     with ThreadPoolExecutor(max_workers=12) as pool:
         results = list(pool.map(lambda c: classify_case(body.get("policy"), c), cases))
-    return JSONResponse({"profile": body.get("profile"), "batchId": body.get("batchId"), "results": results})
+    out = {"profile": body.get("profile"), "batchId": body.get("batchId"), "results": results}
+    remember("classify", {"policy": body.get("policy"), "cases": cases}, out)
+    return JSONResponse(out)
