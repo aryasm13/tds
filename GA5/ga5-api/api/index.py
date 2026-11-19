@@ -7,6 +7,7 @@ Handlers are plain `def` so FastAPI runs them in a thread pool: concurrent reque
 instance don't queue behind each other's blocking model calls.
 """
 import json, os, threading, time
+from concurrent.futures import ThreadPoolExecutor, FIRST_COMPLETED, wait
 from pathlib import Path
 
 import httpx
@@ -26,6 +27,7 @@ EMBED_MODEL = "text-embedding-3-small"
 RAG_MODEL = os.environ.get("RAG_MODEL", "gpt-4.1-mini")
 FALLBACK_MODEL = os.environ.get("RAG_FALLBACK_MODEL", "gpt-4.1-nano")
 BUDGET_S = 7.2                       # grader allows 8 s per request; keep a safety margin
+HEDGE_AFTER = 1.8                    # if the first model call is slow, start a second one alongside it
 
 app = FastAPI()
 
@@ -68,6 +70,18 @@ _KB_FILE = Path(__file__).parent / "kb.npy"
 _kb = np.load(_KB_FILE) if _KB_FILE.exists() else None  # precomputed passage embeddings
 _cache: dict = {}
 _cache_lock = threading.Lock()
+_pool = ThreadPoolExecutor(max_workers=8)
+
+
+def _warm():
+    """Open the TLS/HTTP connection to the model API during cold start, not during round 1."""
+    try:
+        http.get(AI_BASE + "/models", timeout=5)
+    except Exception:
+        pass
+
+
+_pool.submit(_warm)
 
 
 def embed(texts: list[str], timeout: float = 30) -> np.ndarray:
@@ -141,17 +155,31 @@ def query(body: dict = Body(...)):
     order = np.argsort(-sims)
     cand = [int(i) for i in order[:max(k, 5)]]
     prompt = "Passages:\n" + "\n".join(f"[{i}] {PASSAGES[i]}" for i in cand) + f"\n\nQuestion: {q}"
+    # Hedged request: start the strong model, and if it is slow (cold start, provider latency spike)
+    # start the fast model alongside it. Take the strong answer when it arrives, else the fast one.
     out = None
-    for model, cap in ((RAG_MODEL, 4.0), (RAG_MODEL, 3.0), (FALLBACK_MODEL, 2.5)):
-        budget = min(cap, left(t0) - 0.25)
-        if budget < 0.8:
+    futs = {}
+    futs[_pool.submit(chat, RAG_MODEL, RAG_SYSTEM, prompt, max(0.8, left(t0) - 0.3))] = RAG_MODEL
+    deadline = time.monotonic() + max(0.5, min(HEDGE_AFTER, left(t0) - 1.2))
+    done, _ = wait(list(futs), timeout=max(0.0, deadline - time.monotonic()), return_when=FIRST_COMPLETED)
+    if not done:
+        futs[_pool.submit(chat, FALLBACK_MODEL, RAG_SYSTEM, prompt, max(0.8, left(t0) - 0.3))] = FALLBACK_MODEL
+    pending = set(futs)
+    while pending and left(t0) > 0.3:
+        done, pending = wait(pending, timeout=max(0.1, left(t0) - 0.3), return_when=FIRST_COMPLETED)
+        if not done:
             break
-        try:
-            out = chat(model, RAG_SYSTEM, prompt, timeout=budget)
-            attempts.append("ok:" + model)
+        for f in done:
+            try:
+                cand = f.result()
+            except Exception as e:
+                attempts.append(f"{futs[f]}:{type(e).__name__}")
+                continue
+            if out is None or futs[f] == RAG_MODEL:
+                out, chosen = cand, futs[f]
+                attempts.append("ok:" + chosen)
+        if out is not None and (chosen == RAG_MODEL or not pending):
             break
-        except Exception as e:
-            attempts.append(f"{model}:{type(e).__name__}")
     if out is None:                                      # every model attempt failed within the budget
         remember("query", body, ABSTAIN, ms=int((time.monotonic() - t0) * 1000), attempts=attempts)
         return ABSTAIN
