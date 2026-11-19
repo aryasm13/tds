@@ -27,7 +27,7 @@ EMBED_MODEL = "text-embedding-3-small"
 RAG_MODEL = os.environ.get("RAG_MODEL", "gpt-4.1-mini")
 FALLBACK_MODEL = os.environ.get("RAG_FALLBACK_MODEL", "gpt-4.1-nano")
 BUDGET_S = 7.2                       # grader allows 8 s per request; keep a safety margin
-HEDGE_AFTER = 1.8                    # if the first model call is slow, start a second one alongside it
+HEDGE_AFTER = 3.2                    # only hedge genuine stragglers; hedging every call just adds load
 
 app = FastAPI()
 
