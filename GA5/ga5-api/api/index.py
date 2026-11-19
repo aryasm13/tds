@@ -171,12 +171,12 @@ def query(body: dict = Body(...)):
             break
         for f in done:
             try:
-                cand = f.result()
+                got = f.result()
             except Exception as e:
                 attempts.append(f"{futs[f]}:{type(e).__name__}")
                 continue
             if out is None or futs[f] == RAG_MODEL:
-                out, chosen = cand, futs[f]
+                out, chosen = got, futs[f]
                 attempts.append("ok:" + chosen)
         if out is not None and (chosen == RAG_MODEL or not pending):
             break
