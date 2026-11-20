@@ -230,17 +230,17 @@ def classify(body: dict = Body(...)):
     # and the only way to see which graded cases the rules get wrong.
     for case, res in zip(cases, results):
         try:
+            rs = (case.get("proposedTool") or {}).get("resolved") or {}
+            env = case.get("environment") or {}
             print("CASE " + json.dumps({
-                "id": case.get("caseId"),
-                "env": case.get("environment"),
-                "msgs": [str(m.get("content", ""))[:400] for m in case.get("messages") or [] if m.get("role") == "user"],
-                "mem": [str(m)[:200] for m in case.get("memory") or []],
-                "repo": [str(m)[:200] for m in case.get("repositoryInstructions") or []],
-                "tr": [str(m)[:300] for m in case.get("toolResults") or []],
+                "id": str(case.get("caseId"))[-8:],
+                "e": [env.get("kind"), env.get("isolation"), env.get("workspace") or env.get("cwd")],
+                "m": [str(m.get("content", ""))[:260] for m in case.get("messages") or [] if m.get("role") == "user"],
+                "x": [str(i)[:120] for i in (list(case.get("memory") or []) + list(case.get("repositoryInstructions") or []) + list(case.get("toolResults") or []))],
                 "rb": case.get("rollbackPlan"),
-                "tool": (case.get("proposedTool") or {}),
-                "out": [res["requestDecision"], res["toolDecision"], res["route"], res["trajectory"]],
-            }, ensure_ascii=False))
+                "t": rs,
+                "o": [res["requestDecision"], res["toolDecision"], res["route"], res["trajectory"]],
+            }, ensure_ascii=False, separators=(",", ":")))
         except Exception:
             pass
     return JSONResponse(out)
