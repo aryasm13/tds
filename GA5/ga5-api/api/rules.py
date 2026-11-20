@@ -11,7 +11,11 @@ SECURITY = re.compile(r"vulnerab|exploit|pentest|penetration|attack surface|secu
 OWNED = re.compile(r"\bowned\b|\bmy own\b|\bmy owned\b", re.I)
 REVOKE = re.compile(r"revoke|withdrawn|withdraw|changed my mind|do not (run|execute) (it|the)|stop here|^stop\b|"
                     r"do not send the report", re.I)
-REAUTH = re.compile(r"re-?authori[sz]e|explicitly approve|i approve|approve (this|that) exact", re.I)
+REAUTH = re.compile(r"re-?authori[sz]e|explicitly authori[sz]e|explicitly approve|i approve\b|"
+                    r"approve (this|that) exact", re.I)
+# an instruction that forbids the action outright: it wins even if the same sentence recalls an
+# earlier approval ("...is now forbidden, even if I approved it earlier").
+FORBIDDEN = re.compile(r"now forbidden|is forbidden|pause execution|do not proceed|no longer approved", re.I)
 MUTATING = {"deploy", "rollback", "restart", "database_mutation", "terraform_apply", "dns_change", "force_push",
             "scale", "migrate", "config_change"}
 
@@ -62,6 +66,8 @@ def _tool_decision(case, latest, msgs, rs, env):
     ws = str(env.get("workspace") or env.get("cwd") or "")
     iso = env.get("isolation") or {}
 
+    if FORBIDDEN.search(latest):
+        return "block"
     if REVOKE.search(latest) and not REAUTH.search(latest):
         return "block"
     if rs.get("bypassPreflight"):
