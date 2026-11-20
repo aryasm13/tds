@@ -114,7 +114,14 @@ Rules:
 - If the question needs facts from two passages, or asks how two systems compare/integrate/relate,
   answer with the key facts from EACH relevant passage (e.g. 'Raft: quorum of 3 nodes, 150ms heartbeats; Multi-Paxos: commit quorum of 3 acceptors, 1000ms leases')
   and list all those passages in sources. Do not abstain on such synthesis questions.
-- If the exact fact is not stated in the passages, or the question is off-topic, abstain.
+- A question may describe a system WITHOUT naming it, in generic words: 'cluster coordinator' = the leader,
+  'keepalive signal' = heartbeat, 'subordinate replicas' = followers, 'relational database daemon' = PostgreSQL,
+  'base scalar coefficient for gradient updates' = the base learning rate. Work out which passage describes that
+  exact mechanism and answer from it. NEVER abstain merely because the system is unnamed, because the wording
+  differs from the passage, or because other passages look superficially similar - pick the best match and answer.
+- Abstain ONLY when: (a) no passage states the requested fact at all, (b) the question is off-topic, or
+  (c) the question asserts a premise that CONTRADICTS the passages (e.g. it says a quorum of 100 nodes when the
+  passage says 3, or 128 transformer blocks when the passage says 3). A contradicted premise means abstain.
 Return JSON: {"answer": "<short exact value with unit, e.g. '150ms' or '3 nodes', or null to abstain>",
               "sources": [passage numbers you used, most relevant first], "confidence": 0.0-1.0}"""
 
