@@ -144,9 +144,10 @@ def classify(case: dict) -> dict:
         security = SECURITY.search(alltext) or op == "security_test"
         owned = OWNED.search(alltext) or rs.get("ownership") in ("verified-owned", "owned")
         req = "review" if security and not owned else "allow"
-    # defensive security work (malware analysis, IOCs, remediation) is allowed but is still cybersecurity
-    # work, so it routes to the restricted model - routing is independent of approval.
-    security_scope = bool(SECURITY.search(alltext) or op == "security_test" or (harmful and defensive)) and req != "block"
+    # Defensive analysis of harmful material (malware reports, IOCs, translating a threat message) is
+    # allowed and routes to the PRIMARY model: restricted is for vulnerability/exploit work and for
+    # unclear security scope, not for every request that merely mentions a harmful topic.
+    security_scope = bool(SECURITY.search(alltext) or op == "security_test") and req != "block"
     unclear_security = security_scope and req == "review"
 
     if not tool:
