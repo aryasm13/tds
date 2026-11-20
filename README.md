@@ -17,6 +17,7 @@ Science*, cleaned up so classmates can follow along. Every student gets differen
 | [GA2](GA2/README.md) | Done | One Vercel app for all live-server questions |
 | [GA3](GA3/README.md) | Done | Two Render agents + face GLB, morph video, ranking |
 | GA4 | Q1 done | Q1 is the peer review of GA3 faces in the review app, so there's no code. More questions are still being released |
+| [GA5](GA5/README.md) | Done | One Vercel app (RAG + safety router), Ollama/FAISS ranking, ball tracker |
 
 ## What's deployed where
 
@@ -30,6 +31,8 @@ Science*, cleaned up so classmates can follow along. Every student gets differen
 | GA3 | 2 | A2A invoice agent | Render (Docker + PostgreSQL) | `GA3/01/ga3_invoice_agent/ga3_invoice_agent` |
 | GA3 | 4 | Incident triage agent | Render (Docker + PostgreSQL) | `GA3/04` |
 | GA3 | 6, 7 | `zapata_face.glb`, `morph.mp4` | Raw GitHub URL | `GA3/06`, `GA3/07` |
+| GA5 | 1 | `POST /query` (RAG over the 50-passage knowledge base) | Vercel | `GA5/ga5-api` |
+| GA5 | 4 | `POST /classify` (agent-harness safety router) | Vercel | `GA5/ga5-api` |
 
 Each assignment's README has the exact deploy steps and the environment variables it needs.
 
@@ -46,11 +49,15 @@ Each assignment's README has the exact deploy steps and the environment variable
 │   └── leader-agent/                 Q15 LLM ledger agent (Vercel)
 ├── GA2/
 │   └── ga2-api/                      Q3, Q7, Q9, Q11 in one FastAPI app (Vercel)
-└── GA3/
-    ├── 01/ga3_invoice_agent/…        Q2  A2A invoice agent (Render)
-    ├── 04/                           Q4  incident triage agent (Render)
-    ├── 06/ 07/                       Q6  face GLB, Q7 face morph video
-    └── 08/                           Q8  morph ranking PDF
+├── GA3/
+│   ├── 01/ga3_invoice_agent/…        Q2  A2A invoice agent (Render)
+│   ├── 04/                           Q4  incident triage agent (Render)
+│   ├── 06/ 07/                       Q6  face GLB, Q7 face morph video
+│   └── 08/                           Q8  morph ranking PDF
+└── GA5/
+    ├── 02/ 03/                       Q2  Ollama + FAISS ranking, Q3 ball tracker
+    ├── 04/                           Q4  offline tools to replay graded cases
+    └── ga5-api/                      Q1 /query and Q4 /classify in one FastAPI app (Vercel)
 ```
 
 If you fork this repo, replace my values with yours:
@@ -58,6 +65,7 @@ If you fork this repo, replace my values with yours:
 - your own `q-vercel-latency.json` in `GA0/tds-latency/`
 - your `.env` values in `GA1/config-service/`
 - the assigned values at the top of `GA2/ga2-api/api/index.py`
+- your knowledge base in `GA5/ga5-api/api/`: rebuild `passages.json` and `kb.npy` with `GA5/ga5-api/build_kb.py`
 
 ## Running the scripts
 
@@ -73,7 +81,7 @@ run without arguments. If `uv` is not on your PATH, use `python -m uv run ...` i
 
 ## Setting AIPIPE_TOKEN
 
-GA0 Q5/Q11, GA1 Q15, GA2 Q9 and the GA3 agents call an LLM through [AI Pipe](https://aipipe.org/). They read
+GA0 Q5/Q11, GA1 Q15, GA2 Q9, the GA3 agents and GA5 Q1 call an LLM through [AI Pipe](https://aipipe.org/). They read
 the token **only** from an environment variable (`AIPIPE_TOKEN`, or `AI_API_KEY` for the GA3 agents), so never
 paste it into code or commit it. On Vercel and Render, add it under the project's **Environment Variables**.
 
