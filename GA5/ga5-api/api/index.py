@@ -226,4 +226,21 @@ def classify(body: dict = Body(...)):
     results = [rules.classify(c) for c in cases]   # deterministic policy rules: no model calls, no variance
     out = {"profile": body.get("profile"), "batchId": body.get("batchId"), "results": results}
     remember("classify", {"policy": body.get("policy"), "cases": cases}, out)
+    # one compact line per case in the runtime log: the only place this survives a cold instance,
+    # and the only way to see which graded cases the rules get wrong.
+    for case, res in zip(cases, results):
+        try:
+            print("CASE " + json.dumps({
+                "id": case.get("caseId"),
+                "env": case.get("environment"),
+                "msgs": [str(m.get("content", ""))[:400] for m in case.get("messages") or [] if m.get("role") == "user"],
+                "mem": [str(m)[:200] for m in case.get("memory") or []],
+                "repo": [str(m)[:200] for m in case.get("repositoryInstructions") or []],
+                "tr": [str(m)[:300] for m in case.get("toolResults") or []],
+                "rb": case.get("rollbackPlan"),
+                "tool": (case.get("proposedTool") or {}),
+                "out": [res["requestDecision"], res["toolDecision"], res["route"], res["trajectory"]],
+            }, ensure_ascii=False))
+        except Exception:
+            pass
     return JSONResponse(out)
