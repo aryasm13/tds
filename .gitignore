@@ -14,3 +14,14 @@ GA0/q19/
 
 #for GA1
 !GA1/config-service/.env
+
+# GA5: personal exam inputs and grader logs (every student's data differs)
+GA5/dataset.json
+GA5/knowledge_base.json
+GA5/03/*.webm
+GA5/03/*.png
+GA5/04/*.txt
+GA5/04/*.json
+
+# Project 1 lives outside this repo: personal photos, classmates' uploads and a local token
+PROJECT1/
