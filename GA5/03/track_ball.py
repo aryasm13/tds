@@ -43,12 +43,12 @@ while True:
         pred = pos + vel
         cost = np.linalg.norm(pred[:, None] - det[None], axis=2)
         r, c = linear_sum_assignment(cost)
-        good = np.ones(len(r), bool)  # 100 detections every frame: full one-to-one matching
+        good = np.ones(len(r), bool)  # every ball is detected every frame, so match all of them
         newpos = pred.copy()                                   # unmatched balls coast on prediction
         newpos[r[good]] = det[c[good]]
         nd.append(len(det))
         if me in r[good]:
-            worst = max(worst, float(cost[r == me][0, ] if False else cost[me, c[list(r).index(me)]]))
+            worst = max(worst, float(cost[me, c[list(r).index(me)]]))   # how far my ball jumped
         vel = newpos - pos
         pos = newpos
     track[i] = pos[me].copy()
@@ -56,6 +56,7 @@ while True:
 x, y = track[max(track)]
 cv2.imwrite("last_crop.png", cv2.resize(last[max(0, int(y) - 45):int(y) + 45, max(0, int(x) - 45):int(x) + 45], None, fx=4, fy=4,
                                         interpolation=cv2.INTER_NEAREST))
-print("detections min/median/max", min(nd), int(np.median(nd)), max(nd)); print(f"radius {R:.1f}, balls tracked {len(pos)}, frames {i + 1}, worst match residual for my ball {worst:.1f}px")
+print("detections min/median/max", min(nd), int(np.median(nd)), max(nd))
+print(f"radius {R:.1f}, balls tracked {len(pos)}, frames {i + 1}, worst match residual for my ball {worst:.1f}px")
 print("final", round(x), round(y))
 print("; ".join(f"{round(track[k][0])},{round(track[k][1])}" for k in want))

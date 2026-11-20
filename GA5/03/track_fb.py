@@ -26,7 +26,8 @@ while True:
         red_c = np.array([xs.mean(), ys.mean()])
     g = cv2.cvtColor(f, cv2.COLOR_BGR2GRAY)
     mask = (g < 215).astype(np.uint8)
-    # fill holes (the numbers printed on the balls at the end): flood-fill the background from a corner
+    # The numbers printed on the balls near the end punch holes in the mask. Fill only SMALL enclosed
+    # holes (< 60% of a ball): a whole-background flood fill would also fill the arena between balls.
     n_h, lab, st, _ = cv2.connectedComponentsWithStats(1 - mask)
     small = np.isin(lab, [j for j in range(1, n_h) if st[j, cv2.CC_STAT_AREA] < 0.6 * np.pi * R * R])
     mask = mask | small.astype(np.uint8)
