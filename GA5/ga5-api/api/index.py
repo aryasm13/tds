@@ -48,7 +48,7 @@ async def strip_vercel_prefix(request, call_next):
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 LOG: list = []                       # recent grader traffic (in-memory, per instance) for debugging
-LOG_KEY = os.environ.get("LOG_KEY", "ga5-debug-7f3c")
+LOG_KEY = os.environ.get("LOG_KEY")         # set it in Vercel to enable GET /debug/log?key=...
 
 
 def remember(kind: str, req, resp, **meta):
@@ -61,7 +61,8 @@ def remember(kind: str, req, resp, **meta):
 
 @app.get("/debug/log")
 def debug_log(key: str = ""):
-    return LOG if key == LOG_KEY else JSONResponse({"detail": "Not Found"}, status_code=404)
+    """Recent requests on this instance. Off unless LOG_KEY is set, so the public repo leaks nothing."""
+    return LOG if LOG_KEY and key == LOG_KEY else JSONResponse({"detail": "Not Found"}, status_code=404)
 
 
 http = httpx.Client(timeout=30, headers={"Authorization": f"Bearer {AI_KEY}"})
