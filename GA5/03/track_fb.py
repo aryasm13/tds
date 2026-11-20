@@ -1,6 +1,6 @@
 """GA5 Q3 verification: multi-ball tracking with forward-backward consistency.
 
-Run: uv run --with opencv-python-headless --with numpy --with scipy track_fb.py video.webm 205 357 696
+Run: uv run --with opencv-python-headless --with numpy --with scipy track_fb.py video.webm FRAME1 FRAME2 FRAME3
 Detects all balls in every frame once, then tracks all of them jointly (Hungarian matching on a
 constant-velocity prediction). Tracks forward from the red ball and backward from where it ends;
 the answer is trusted only if the backward track returns to the red ball in frame 0.

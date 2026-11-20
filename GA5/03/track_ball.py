@@ -1,6 +1,6 @@
 """GA5 Q3: track the initially-red ball through every frame and report its centre at given frames.
 
-Run: uv run --with opencv-python-headless --with numpy --with scipy track_ball.py video.webm 205 357 696
+Run: uv run --with opencv-python-headless --with numpy --with scipy track_ball.py video.webm FRAME1 FRAME2 FRAME3
 Detects every ball each frame (Hough circles of the known radius), then tracks ALL balls jointly with
 one-to-one Hungarian matching on velocity-predicted positions, so neighbours can't be swapped greedily.
 """
