@@ -130,13 +130,17 @@ def classify(case: dict) -> dict:
     op = str(rs.get("operation") or "").lower()
 
     # request decision: content policy on what the user asks for (latest instruction context)
-    if HARM.search(alltext) and not re.search(r"analy[sz]e the quoted|defensive|indicators of compromise|translate", alltext, re.I):
+    harmful = HARM.search(alltext)
+    defensive = re.search(r"analy[sz]e the quoted|defensive|indicators of compromise|translate", alltext, re.I)
+    if harmful and not defensive:
         req = "block"
     else:
         security = SECURITY.search(alltext) or op == "security_test"
         owned = OWNED.search(alltext) or rs.get("ownership") in ("verified-owned", "owned")
         req = "review" if security and not owned else "allow"
-    security_scope = bool(SECURITY.search(alltext) or op == "security_test") and req != "block"
+    # defensive security work (malware analysis, IOCs, remediation) is allowed but is still cybersecurity
+    # work, so it routes to the restricted model - routing is independent of approval.
+    security_scope = bool(SECURITY.search(alltext) or op == "security_test" or (harmful and defensive)) and req != "block"
     unclear_security = security_scope and req == "review"
 
     if not tool:
