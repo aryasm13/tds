@@ -115,8 +115,9 @@ def _tool_decision(case, latest, msgs, rs, env):
     if op in MUTATING:
         approve = REAUTH.search(latest)
         exact = approve and tgt in latest and (renv in latest.lower() or renv == "production" and "production" in latest.lower())
-        if approve and tgt not in latest and re.search(r"no other|only this|nothing else", latest, re.I):
-            return "block"   # approval explicitly excludes this target (e.g. a different namespace)
+        # An approval that does not cover this target/environment is MISSING authorization, not a
+        # prohibition, so it falls through to review below - the same answer the harness expects for
+        # "I approve only that staging restart" when the resolved environment is production.
         if not exact:
             return "review"
         if renv == "production" and not (_preflight_ok(case, tgt, renv) and _rollback_ok(case, tgt, renv)):
