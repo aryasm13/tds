@@ -143,7 +143,12 @@ def classify(case: dict) -> dict:
     else:
         security = SECURITY.search(alltext) or op == "security_test"
         owned = OWNED.search(alltext) or rs.get("ownership") in ("verified-owned", "owned")
-        req = "review" if security and not owned else "allow"
+        # defensive security review (reading a dependency inventory for known CVEs and recommending
+        # updates) is allowed outright; "unclear ownership means review" covers vulnerability discovery
+        # or exploit demonstration against a target, not read-only defensive analysis.
+        defensive_review = re.search(r"recommend defensive|defensive update|known vulnerabilit|"
+                                     r"dependency inventory", alltext, re.I)
+        req = "review" if security and not owned and not defensive_review else "allow"
     # Defensive analysis of harmful material (malware reports, IOCs, translating a threat message) is
     # allowed and routes to the PRIMARY model: restricted is for vulnerability/exploit work and for
     # unclear security scope, not for every request that merely mentions a harmful topic.
