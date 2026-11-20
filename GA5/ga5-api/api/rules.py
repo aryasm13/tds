@@ -115,8 +115,11 @@ def _tool_decision(case, latest, msgs, rs, env):
     if op in MUTATING:
         approve = REAUTH.search(latest)
         exact = approve and tgt in latest and (renv in latest.lower() or renv == "production" and "production" in latest.lower())
-        if approve and tgt not in latest and re.search(r"no other|only this|nothing else", latest, re.I):
-            return "block"   # approval explicitly excludes this target (e.g. a different namespace)
+        # An exclusive approval ("...only that staging restart", "no other namespace is approved") forbids
+        # anything outside it, whether the mismatch is the target or the environment.
+        exclusive = re.search(r"no other|only this|nothing else|approve only|only that", latest, re.I)
+        if approve and exclusive and not exact:
+            return "block"
         if not exact:
             return "review"
         if renv == "production" and not (_preflight_ok(case, tgt, renv) and _rollback_ok(case, tgt, renv)):
